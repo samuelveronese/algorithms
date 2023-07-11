@@ -1,3 +1,7 @@
+import networkx as nx
+import matplotlib.pyplot as plt
+
+
 class Node:
     def __init__(self, name):
         self.name = name
@@ -6,6 +10,7 @@ class Node:
         self.dfs_start_time = None
         self.dfs_end_time = None
         self.predecessor = None
+        self.key = None
 
     def __str__(self):
         return self.name
@@ -56,8 +61,18 @@ class Graph:
         for node in self.nodes:
             string += str(node) + ": " + "\n"
             for adj in self.adj(node):
-                string += "\t - " + str(adj) + "\n"
+                string += "\t - " + str(adj) + " weight: " + \
+                    str(self.get_weight(node, adj)) + "\n"
         return string
+
+    def visualize(self):
+        G = nx.Graph()
+        edges = []
+        for edge in self.edges:
+            edges.append((edge.u.name, edge.v.name))
+        G.add_edges_from(edges)
+        nx.draw_networkx(G)
+        plt.show()
 
     def adj(self, node):
         adj = []
@@ -169,39 +184,113 @@ class Graph:
 
         return sc
 
+    def find_set(self, sets, u):
+        if sets[u][0] == u:
+            return u
+        return self.find_set(sets, sets[u][0])
+
+    def union(self, sets, u, v):
+        x_root = self.find_set(sets, u)
+        y_root = self.find_set(sets, v)
+        if sets[x_root][1] < sets[y_root][1]:
+            sets[x_root][0] = y_root
+        elif sets[x_root][1] > sets[y_root][1]:
+            sets[y_root][0] = x_root
+        else:
+            sets[y_root][0] = x_root
+            sets[x_root][1] += 1
+
+    def kruskal(self):
+        result = []
+
+        # sort edges by weight
+        edges = list(self.edges)
+        edges.sort(key=lambda x: x.w)
+
+        # make set for each node
+        sets = {}
+        for v in self.nodes:
+            sets[v] = [v, 0]
+
+        for edge in edges:
+            u = edge.u
+            v = edge.v
+            if self.find_set(sets, u) != self.find_set(sets, v):
+                result.append(edge)
+                self.union(sets, u, v)
+
+        return result
+
+    def get_weight(self, u, v):
+        for edge in self.edges:
+            if edge.u == u and edge.v == v:
+                return edge.w
+        return float('inf')
+
+    def prim(self, r):
+        for u in self.nodes:
+            u.key = float('inf')
+            u.predecessor = None
+
+        r.key = 0
+        queue = list(self.nodes)
+        while queue:
+            u = min(queue, key=lambda x: x.key)
+            queue.remove(u)
+            for v in self.adj(u):
+                if v in queue and self.get_weight(u, v) < v.key:
+                    v.predecessor = u
+                    v.key = self.get_weight(u, v)
+
+        result = []
+        for u in self.nodes:
+            if u.predecessor:
+                result.append(Edge(u.predecessor, u, u.key))
+        return result
+
+    def relax(self, u, v):
+        if v.distance > u.distance + self.get_weight(u, v):
+            v.distance = u.distance + self.get_weight(u, v)
+            v.predecessor = u
+
+    def initialize_single_source(self, s):
+        for node in self.nodes:
+            node.distance = float('inf')
+            node.predecessor = None
+        s.distance = 0
+
+    def bellman_ford(self, s):
+        self.initialize_single_source(s)
+
+        for _ in range(len(self.nodes)-1):
+            for edge in self.edges:
+                self.relax(edge.u, edge.v)
+
+        for edge in self.edges:
+            if edge.v.distance > edge.u.distance + self.get_weight(edge.u, edge.v):
+                return False
+
+        return True
+
+    def dag_shortest_paths(self, s):
+
+        nodes = self.topological_sort()
+        self.initialize_single_source(s)
+        for u in nodes:
+            for v in self.adj(u):
+                self.relax(u, v)
+
+    def dijkstra(self, s):
+        self.initialize_single_source(s)
+        S = []
+        Q = list(self.nodes)
+        while Q:
+            u = min(Q, key=lambda x: x.distance)
+            Q.remove(u)
+            S.append(u)
+            for v in self.adj(u):
+                self.relax(u, v)
+
 
 if __name__ == '__main__':
     graph = Graph('G')
-
-    a = Node('a')
-    b = Node('b')
-    c = Node('c')
-    d = Node('d')
-    e = Node('e')
-    f = Node('f')
-    g = Node('g')
-    h = Node('h')
-    graph.add_nodes([a, b, c, d, e, f, g, h])
-
-    edges = [(a, b, 1),
-             (b, e, 1),
-             (b, f, 1),
-             (b, c, 1),
-             (c, d, 1),
-             (c, g, 1),
-             (d, c, 1),
-             (d, h, 1),
-             (e, a, 1),
-             (e, f, 1),
-             (f, g, 1),
-             (g, f, 1),
-             (g, h, 1),
-             (h, h)]
-    graph.add_edges(edges)
-
-    scc = graph.strongly_connected_components()
-    for sc in scc:
-        print("[", end="")
-        for node in sc:
-            print(node, end="")
-        print("]")
